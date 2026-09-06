@@ -35,6 +35,10 @@ Full documentation, API reference, and guides are available at **[mpp.dev/sdk/ty
 
 Contributors changing Tempo sessions should read the [session design](./src/tempo/session/README.md) before altering credential, recovery, accounting, or transport behavior.
 
+See [deferred EVM payments](./src/evm/README.md) for inspecting payments before signing and
+validating credentials before settlement, and [MCP composition](./src/mcp/server/README.md)
+for offering multiple payment options from one tool.
+
 ## Install
 
 ```bash
