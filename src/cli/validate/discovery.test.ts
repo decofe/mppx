@@ -1,9 +1,10 @@
-import { describe, expect, test } from 'vp/test'
+import { afterEach, describe, expect, test, vi } from 'vp/test'
 
 import {
   buildUrl,
   extractEndpointsFromDiscovery,
   extractRequestBodyFromDiscovery,
+  validateLlmsDoc,
 } from './discovery.js'
 
 describe('buildUrl', () => {
@@ -431,5 +432,26 @@ describe('extractRequestBodyFromDiscovery', () => {
       path: '/api/test',
     })
     expect(body).toBeUndefined()
+  })
+})
+
+describe('validateLlmsDoc', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  test('passes when llms.txt is present', async () => {
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response('# API\n\nDocumentation', { headers: { 'content-type': 'text/plain' } }),
+      )
+
+    expect(await validateLlmsDoc('https://example.com/api')).toMatchObject({ severity: 'pass' })
+    expect(fetch).toHaveBeenCalledWith('https://example.com/llms.txt', expect.anything())
+  })
+
+  test('suggests adding llms.txt when missing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('Not found', { status: 404 }))
+
+    expect(await validateLlmsDoc('https://example.com')).toMatchObject({ severity: 'suggested' })
   })
 })
