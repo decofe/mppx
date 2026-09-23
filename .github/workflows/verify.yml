@@ -33,7 +33,10 @@ jobs:
 
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959
+        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959 # 2026-09-23T05-09-41Z-117919c9
+
+
+
 
       - name: Clone repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,7 +110,10 @@ jobs:
       VITE_TEMPO_TAG: latest
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959
+        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959 # 2026-09-23T05-09-41Z-117919c9
+
+
+
 
       - name: Clone repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,7 +135,7 @@ jobs:
       - name: Resolve Tempo image digest
         id: tempo-digest
         run: |
-          digest=$(docker buildx imagetools inspect ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG} --raw | sha256sum | cut -d' ' -f1)
+          digest=$(docker buildx imagetools inspect "ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG}" --raw | sha256sum | cut -d' ' -f1)
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
       - name: Cache Tempo Docker image
@@ -146,8 +152,8 @@ jobs:
       - name: Pull and cache Tempo image
         if: steps.docker-cache.outputs.cache-hit != 'true'
         run: |
-          docker pull ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG}
-          docker save ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG} -o /tmp/tempo-image.tar
+          docker pull "ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG}"
+          docker save "ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG}" -o /tmp/tempo-image.tar
 
       - name: Start Tempo localnet
         run: |
@@ -155,7 +161,7 @@ jobs:
           docker run -d \
             --name mppx-tempo-localnet \
             -p 18545:54515 \
-            ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG} \
+            "ghcr.io/tempoxyz/tempo:${VITE_TEMPO_TAG}" \
             node \
             --authrpc.port 54545 \
             --datadir /tmp/mppx-tempo-localnet \
@@ -175,7 +181,7 @@ jobs:
             --port 54525 \
             --ws.port 54535
 
-          for attempt in {1..30}; do
+          for _attempt in {1..30}; do
             if curl -fsS \
               -H 'content-type: application/json' \
               --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
@@ -251,7 +257,10 @@ jobs:
       X402_LOCALNET: true
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959
+        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959 # 2026-09-23T05-09-41Z-117919c9
+
+
+
 
       - name: Clone repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -280,7 +289,7 @@ jobs:
             --chain-id 31337 \
             --mnemonic 'test test test test test test test test test test test junk'
 
-          for attempt in {1..30}; do
+          for _attempt in {1..30}; do
             if curl -fsS \
               -H 'content-type: application/json' \
               --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
@@ -319,7 +328,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959
+        uses: tempoxyz/gh-actions/actions/secure-runner@117919c943b804057be733b0c4034c5542e58959 # 2026-09-23T05-09-41Z-117919c9
+
+
+
 
       - name: Clone repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
