@@ -69,6 +69,29 @@ export async function handler(request: Request) {
 
 Generate `MPP_SECRET_KEY` with at least 32 bytes, for example: `openssl rand -base64 32`.
 
+#### Sponsored charge fee tokens
+
+Tempo charges allow pathUSD and USDC.e for sponsored fees on mainnet, and pathUSD
+on other chains. Set `allowedFeeTokens` on `tempo.charge()` (or `tempo()`) to
+replace those defaults with your own non-empty list:
+
+```ts
+tempo.charge({
+  feePayer: 'https://your-fee-payer.example',
+  allowedFeeTokens: [
+    '0x20c0000000000000000000000000000000000000', // pathUSD
+    '0x20C000000000000000000000b9537d11c60E8b50', // USDC.e
+    // Add other trusted fee-token addresses here.
+  ],
+})
+```
+
+This server-side policy applies to incoming sponsored credentials and tokens
+selected by local or hosted fee payers. Local fee payers select a funded token
+in list order unless `feeToken` explicitly selects an allowed token. Hosted fee
+payers choose their own token, which must be in the list. The option does not
+change the payment currency or session policy.
+
 ### Client
 
 ```ts

@@ -59,6 +59,7 @@ export function charge<const parameters extends charge.Parameters>(
 ): Method.Server<typeof Methods.charge, charge.DeriveDefaults<parameters>> {
   const {
     machineTokenEnabled,
+    allowedFeeTokens: configuredAllowedFeeTokens,
     amount,
     currency = defaults.resolveCurrency(parameters),
     decimals = defaults.decimals,
@@ -74,6 +75,8 @@ export function charge<const parameters extends charge.Parameters>(
     validateSender,
     waitForConfirmation = true,
   } = parameters
+  if (configuredAllowedFeeTokens?.length === 0)
+    throw new Error('`allowedFeeTokens` must contain at least one token.')
   const storeKeyPrefix = parameters.storeKeyPrefix ?? ''
   const rawStore = (parameters.store ?? Store.memory()) as Store.AtomicStore<charge.StoreItemMap>
   const store = Store.from(rawStore, { keyPrefix: storeKeyPrefix })
@@ -328,7 +331,10 @@ export function charge<const parameters extends charge.Parameters>(
           { amount, currency, recipient },
           { currency, expectedTransfers: transfers },
         )
-      FeePayer.assertAllowedFeeToken(transaction, FeePayer.defaultAllowedFeeTokens(chainId))
+      FeePayer.assertAllowedFeeToken(
+        transaction,
+        configuredAllowedFeeTokens ?? FeePayer.defaultAllowedFeeTokens(chainId),
+      )
     } else {
       await viem_call(
         client,
@@ -564,7 +570,8 @@ export function charge<const parameters extends charge.Parameters>(
           let reservation: SponsorBudget.Handle | undefined
 
           try {
-            const allowedFeeTokens = FeePayer.defaultAllowedFeeTokens(chainId)
+            const allowedFeeTokens =
+              configuredAllowedFeeTokens ?? FeePayer.defaultAllowedFeeTokens(chainId)
             if (isFeePayerTx) FeePayer.assertAllowedFeeToken(transaction, allowedFeeTokens)
             const selectableFeeTokens = allowedFeeTokens as readonly `0x${string}`[]
 
@@ -785,6 +792,13 @@ export declare namespace charge {
   }
 
   type Parameters = {
+    /**
+     * Tokens permitted for sponsored charge transaction fees, including tokens
+     * selected by a remote fee payer. Defaults to pathUSD and USDC.e on mainnet,
+     * and pathUSD on other chains. A custom list replaces these defaults and
+     * must contain at least one token. This does not change the payment currency.
+     */
+    allowedFeeTokens?: readonly `0x${string}`[] | undefined
     /** Enables first-party machine-token funding through the canonical swapper. */
     machineTokenEnabled?: boolean | undefined
     /** Render payment page when Accept header is text/html (e.g. in browsers) */
@@ -798,7 +812,8 @@ export declare namespace charge {
     feePayerPolicy?: FeePayerPolicy | undefined
     /**
      * Token a local fee payer uses to pay gas. If omitted, mppx selects a
-     * funded allowed token, preferring pathUSD.
+     * funded allowed token in `allowedFeeTokens` order (pathUSD first by default).
+     * An explicit token must also be in the allowed list.
      *
      * This option is not supported with a remote fee-payer URL, which selects
      * its own token.
