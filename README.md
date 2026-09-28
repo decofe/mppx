@@ -69,42 +69,6 @@ export async function handler(request: Request) {
 
 Generate `MPP_SECRET_KEY` with at least 32 bytes, for example: `openssl rand -base64 32`.
 
-#### Sponsored charge fee tokens
-
-Local Tempo charge sponsorship allows pathUSD and USDC.e for fees on mainnet,
-and pathUSD on other chains. Hosted sponsorship trusts the configured provider's
-fee-token choice by default, so provider token changes do not require an SDK update:
-
-```ts
-tempo.charge({ feePayer: 'https://your-fee-payer.example' })
-```
-
-Set `allowedFeeTokens` on `tempo.charge()`, `tempo()`, or `tempo.common()` to
-restrict hosted sponsorship or replace the local defaults with a non-empty list:
-
-```ts
-tempo.charge({
-  feePayer: 'https://your-fee-payer.example',
-  allowedFeeTokens: [
-    '0x20c0000000000000000000000000000000000000', // pathUSD
-    '0x20C000000000000000000000b9537d11c60E8b50', // USDC.e
-    // Add other trusted fee-token addresses here.
-  ],
-})
-```
-
-This server-side policy applies to incoming sponsored credentials and tokens
-selected by local or hosted fee payers. Local fee payers select a funded token
-in list order unless `feeToken` explicitly selects an allowed token. Hosted fee
-payers choose their own token, which must be in the list when one is supplied.
-`feeToken` is local-only; it cannot force a hosted provider's choice. A request-level
-local payer still uses local defaults, even if a hosted provider is configured.
-
-Omitting the hosted allowlist does not disable address validation, signature
-handling, transaction policy, or pre-broadcast simulation. Providers still need
-a chain-supported, funded fee token. Empty lists are rejected. These options do
-not change the payment currency or session policy.
-
 ### Client
 
 ```ts

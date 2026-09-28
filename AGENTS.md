@@ -179,6 +179,8 @@ The changelog is auto-generated from changesets during `changeset version`.
 
 ## Code Documentation
 
+Do not update `README.md` unless the user explicitly requests README changes.
+
 You MUST add JSDoc to exported functions and to any complicated functions.
 
 ## Commands
