@@ -442,10 +442,11 @@ describe('validateCalls', () => {
 })
 
 describe('fee token allowlist', () => {
-  test('includes pathUSD and the chain default currency', () => {
+  test('includes pathUSD, the chain default currency, and OUSD on mainnet', () => {
     expect(defaultAllowedFeeTokens(defaults.chainId.mainnet)).toEqual([
       defaults.tokens.pathUsd,
       defaults.tokens.usdc,
+      defaults.tokens.ousd,
     ])
   })
 
@@ -453,14 +454,14 @@ describe('fee token allowlist', () => {
     expect(defaultAllowedFeeTokens(defaults.chainId.testnet)).toEqual([defaults.tokens.pathUsd])
   })
 
-  test('accepts allowlisted fee tokens', () => {
-    expect(() =>
-      assertAllowedFeeToken(
-        { feeToken: defaults.tokens.usdc },
-        defaultAllowedFeeTokens(defaults.chainId.mainnet),
-      ),
-    ).not.toThrow()
-  })
+  test.each([defaults.tokens.usdc, defaults.tokens.ousd, defaults.tokens.ousd.toLowerCase()])(
+    'accepts allowlisted fee token %s',
+    (feeToken) => {
+      expect(() =>
+        assertAllowedFeeToken({ feeToken }, defaultAllowedFeeTokens(defaults.chainId.mainnet)),
+      ).not.toThrow()
+    },
+  )
 
   test('error: rejects non-string fee tokens', () => {
     expect(() =>
@@ -515,105 +516,110 @@ describe('fillHostedFeePayerTransaction', () => {
     details,
   } as const
 
-  test('uses hosted fillTransaction and preserves sender-committed fields', async () => {
-    // Sign over the payload built from the actual RPC request body so this
-    // verifies recovery parity with the real request shape.
-    const sponsorPrivateKey =
-      '0x0000000000000000000000000000000000000000000000000000000000000042' as const
-    const sponsorAddress = Address.fromPublicKey(
-      Secp256k1.getPublicKey({ privateKey: sponsorPrivateKey }),
-    )
-    let realFeePayerSignature: ReturnType<typeof Secp256k1.sign> | undefined
+  test.each([defaults.tokens.pathUsd, defaults.tokens.ousd])(
+    'uses hosted fillTransaction with %s and preserves sender-committed fields',
+    async (feeToken) => {
+      // Sign over the payload built from the actual RPC request body so this
+      // verifies recovery parity with the real request shape.
+      const sponsorPrivateKey =
+        '0x0000000000000000000000000000000000000000000000000000000000000042' as const
+      const sponsorAddress = Address.fromPublicKey(
+        Secp256k1.getPublicKey({ privateKey: sponsorPrivateKey }),
+      )
+      let realFeePayerSignature: ReturnType<typeof Secp256k1.sign> | undefined
 
-    const request = vi.fn(async (args: any) => {
-      const rpc = args.params[0]
-      const quantity = (value: unknown) =>
-        value === undefined ? undefined : BigInt(value as string)
-      realFeePayerSignature = Secp256k1.sign({
-        payload: TxEnvelopeTempo.getFeePayerSignPayload(
-          TxEnvelopeTempo.from({
-            accessList: rpc.accessList,
-            calls: rpc.calls.map(({ value, ...call }: any) => ({
-              ...call,
-              ...(value && value !== '0x' ? { value: BigInt(value) } : {}),
-            })),
-            chainId: hostedTransaction.chainId,
-            feeToken: defaults.tokens.pathUsd,
-            from: rpc.from,
-            ...(quantity(rpc.gas) !== undefined ? { gas: quantity(rpc.gas) } : {}),
-            ...(rpc.keyAuthorization !== undefined
-              ? { keyAuthorization: rpc.keyAuthorization }
-              : {}),
-            ...(quantity(rpc.maxFeePerGas) !== undefined
-              ? { maxFeePerGas: quantity(rpc.maxFeePerGas) }
-              : {}),
-            ...(quantity(rpc.maxPriorityFeePerGas) !== undefined
-              ? { maxPriorityFeePerGas: quantity(rpc.maxPriorityFeePerGas) }
-              : {}),
-            ...(quantity(rpc.nonce) !== undefined ? { nonce: quantity(rpc.nonce) } : {}),
-            ...(quantity(rpc.nonceKey) !== undefined ? { nonceKey: quantity(rpc.nonceKey) } : {}),
-            type: 'tempo',
-            ...(rpc.validAfter !== undefined ? { validAfter: Number(BigInt(rpc.validAfter)) } : {}),
-            ...(rpc.validBefore !== undefined
-              ? { validBefore: Number(BigInt(rpc.validBefore)) }
-              : {}),
-          } as any) as any,
-          { sender: rpc.from },
-        ),
-        privateKey: sponsorPrivateKey,
+      const request = vi.fn(async (args: any) => {
+        const rpc = args.params[0]
+        const quantity = (value: unknown) =>
+          value === undefined ? undefined : BigInt(value as string)
+        realFeePayerSignature = Secp256k1.sign({
+          payload: TxEnvelopeTempo.getFeePayerSignPayload(
+            TxEnvelopeTempo.from({
+              accessList: rpc.accessList,
+              calls: rpc.calls.map(({ value, ...call }: any) => ({
+                ...call,
+                ...(value && value !== '0x' ? { value: BigInt(value) } : {}),
+              })),
+              chainId: hostedTransaction.chainId,
+              feeToken,
+              from: rpc.from,
+              ...(quantity(rpc.gas) !== undefined ? { gas: quantity(rpc.gas) } : {}),
+              ...(rpc.keyAuthorization !== undefined
+                ? { keyAuthorization: rpc.keyAuthorization }
+                : {}),
+              ...(quantity(rpc.maxFeePerGas) !== undefined
+                ? { maxFeePerGas: quantity(rpc.maxFeePerGas) }
+                : {}),
+              ...(quantity(rpc.maxPriorityFeePerGas) !== undefined
+                ? { maxPriorityFeePerGas: quantity(rpc.maxPriorityFeePerGas) }
+                : {}),
+              ...(quantity(rpc.nonce) !== undefined ? { nonce: quantity(rpc.nonce) } : {}),
+              ...(quantity(rpc.nonceKey) !== undefined ? { nonceKey: quantity(rpc.nonceKey) } : {}),
+              type: 'tempo',
+              ...(rpc.validAfter !== undefined
+                ? { validAfter: Number(BigInt(rpc.validAfter)) }
+                : {}),
+              ...(rpc.validBefore !== undefined
+                ? { validBefore: Number(BigInt(rpc.validBefore)) }
+                : {}),
+            } as any) as any,
+            { sender: rpc.from },
+          ),
+          privateKey: sponsorPrivateKey,
+        })
+        return {
+          tx: {
+            feePayerSignature: realFeePayerSignature,
+            feeToken,
+            gas: '0x1',
+            maxFeePerGas: '0x2',
+          },
+        }
       })
-      return {
-        tx: {
-          feePayerSignature: realFeePayerSignature,
-          feeToken: defaults.tokens.pathUsd,
-          gas: '0x1',
-          maxFeePerGas: '0x2',
-        },
-      }
-    })
-    const result = await fillHostedFeePayerTransaction({
-      allowedFeeTokens: defaultAllowedFeeTokens(defaults.chainId.mainnet),
-      ...hostedContext,
-      request,
-      transaction: hostedTransaction as any,
-    })
+      const result = await fillHostedFeePayerTransaction({
+        allowedFeeTokens: defaultAllowedFeeTokens(defaults.chainId.mainnet),
+        ...hostedContext,
+        request,
+        transaction: hostedTransaction as any,
+      })
 
-    expect(result.feeToken).toBe(defaults.tokens.pathUsd)
-    expect(result.feePayer.toLowerCase()).toBe(sponsorAddress.toLowerCase())
-    const serialized = result.serializedTransaction
+      expect(result.feeToken).toBe(feeToken)
+      expect(result.feePayer.toLowerCase()).toBe(sponsorAddress.toLowerCase())
+      const serialized = result.serializedTransaction
 
-    expect(request).toHaveBeenCalledOnce()
-    const body = request.mock.calls[0]![0]
-    expect(body).toMatchObject({
-      method: 'eth_fillTransaction',
-    })
-    expect(body.params[0]).toMatchObject({
-      calls: hostedTransaction.calls.map((call) => ({
-        data: call.data,
-        to: call.to,
-        value: '0x',
-      })),
-      feePayer: true,
-      from: hostedTransaction.from,
-      gas: toHex(hostedTransaction.gas),
-      maxFeePerGas: toHex(hostedTransaction.maxFeePerGas),
-      maxPriorityFeePerGas: toHex(hostedTransaction.maxPriorityFeePerGas),
-      nonce: toHex(hostedTransaction.nonce),
-      nonceKey: toHex(hostedTransaction.nonceKey),
-      type: '0x76',
-      validBefore: toHex(hostedTransaction.validBefore),
-    })
+      expect(request).toHaveBeenCalledOnce()
+      const body = request.mock.calls[0]![0]
+      expect(body).toMatchObject({
+        method: 'eth_fillTransaction',
+      })
+      expect(body.params[0]).toMatchObject({
+        calls: hostedTransaction.calls.map((call) => ({
+          data: call.data,
+          to: call.to,
+          value: '0x',
+        })),
+        feePayer: true,
+        from: hostedTransaction.from,
+        gas: toHex(hostedTransaction.gas),
+        maxFeePerGas: toHex(hostedTransaction.maxFeePerGas),
+        maxPriorityFeePerGas: toHex(hostedTransaction.maxPriorityFeePerGas),
+        nonce: toHex(hostedTransaction.nonce),
+        nonceKey: toHex(hostedTransaction.nonceKey),
+        type: '0x76',
+        validBefore: toHex(hostedTransaction.validBefore),
+      })
 
-    const transaction: Transaction.TransactionSerializableTempo = Transaction.deserialize(
-      serialized as Transaction.TransactionSerializedTempo,
-    )
-    expect(transaction.gas).toBe(hostedTransaction.gas)
-    expect(transaction.maxFeePerGas).toBe(hostedTransaction.maxFeePerGas)
-    expect(transaction.calls).toEqual(hostedTransaction.calls)
-    expect(transaction.feeToken).toBe(defaults.tokens.pathUsd)
-    expect(BigInt(transaction.feePayerSignature!.r)).toBe(realFeePayerSignature!.r)
-    expect(BigInt(transaction.feePayerSignature!.s)).toBe(realFeePayerSignature!.s)
-  })
+      const transaction: Transaction.TransactionSerializableTempo = Transaction.deserialize(
+        serialized as Transaction.TransactionSerializedTempo,
+      )
+      expect(transaction.gas).toBe(hostedTransaction.gas)
+      expect(transaction.maxFeePerGas).toBe(hostedTransaction.maxFeePerGas)
+      expect(transaction.calls).toEqual(hostedTransaction.calls)
+      expect(transaction.feeToken?.toString().toLowerCase()).toBe(feeToken.toLowerCase())
+      expect(BigInt(transaction.feePayerSignature!.r)).toBe(realFeePayerSignature!.r)
+      expect(BigInt(transaction.feePayerSignature!.s)).toBe(realFeePayerSignature!.s)
+    },
+  )
 
   test('error: requires hosted fee payer to return a feeToken', async () => {
     await expect(

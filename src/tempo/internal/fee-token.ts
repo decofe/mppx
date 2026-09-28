@@ -41,6 +41,7 @@ export function defaultFeeTokens(chainId: number | undefined): Address[] {
   const tokens: Address[] = []
   pushUnique(tokens, defaults.tokens.pathUsd)
   pushUnique(tokens, defaults.currency[chainId as keyof typeof defaults.currency])
+  if (chainId === defaults.chainId.mainnet) pushUnique(tokens, defaults.tokens.ousd)
   return tokens
 }
 

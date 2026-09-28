@@ -12,6 +12,8 @@ export const tokens = {
   usdc: '0x20C000000000000000000000b9537d11c60E8b50',
   /** pathUSD token address. */
   pathUsd: '0x20c0000000000000000000000000000000000000',
+  /** OUSD token address on Tempo mainnet. */
+  ousd: '0x20c0000000000000000000006a37DA5C996874BE',
 } as const
 
 /** Chain ID → default currency. */
