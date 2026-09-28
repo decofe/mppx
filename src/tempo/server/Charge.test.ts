@@ -119,6 +119,23 @@ async function fillHostedFeePayer(
   }
 }
 
+function credentialWithFeeToken(credential: string, feeToken: `0x${string}`) {
+  const decoded = Credential.deserialize<{ signature: Hex.Hex; type: 'transaction' }>(credential)
+  return Credential.serialize({
+    ...decoded,
+    payload: {
+      ...decoded.payload,
+      signature: TxEnvelopeTempo.serialize(
+        {
+          ...TxEnvelopeTempo.deserialize(decoded.payload.signature as TxEnvelopeTempo.Serialized),
+          feeToken,
+        },
+        { format: 'feePayer', sender: accounts[1].address },
+      ),
+    },
+  })
+}
+
 function machineTokenReceipt(parameters: {
   amount: bigint
   from: Hex.Hex
@@ -2106,26 +2123,7 @@ describe('tempo', () => {
       expect(response.status).toBe(402)
 
       let credential = await mppx.createCredential(response)
-      if (feeToken) {
-        const decoded = Credential.deserialize<{ signature: Hex.Hex; type: 'transaction' }>(
-          credential,
-        )
-        credential = Credential.serialize({
-          ...decoded,
-          payload: {
-            ...decoded.payload,
-            signature: TxEnvelopeTempo.serialize(
-              {
-                ...TxEnvelopeTempo.deserialize(
-                  decoded.payload.signature as TxEnvelopeTempo.Serialized,
-                ),
-                feeToken,
-              },
-              { format: 'feePayer', sender: accounts[1].address },
-            ),
-          },
-        })
-      }
+      if (feeToken) credential = credentialWithFeeToken(credential, feeToken)
       if (!accepted) {
         await expect(chargeServer.validateCredential(credential)).rejects.toThrow(
           'feeToken is not allowed',
@@ -2229,8 +2227,27 @@ describe('tempo', () => {
         feeToken: defaults.tokens.pathUsd,
         expected: defaults.tokens.pathUsd,
       },
+      { allowedFeeTokens: undefined, feeToken: asset, expected: undefined },
+      {
+        allowedFeeTokens: undefined,
+        feeToken: undefined,
+        expected: defaults.tokens.pathUsd,
+        remoteConfigured: true,
+      },
+      { allowedFeeTokens: [asset], feeToken: undefined, expected: asset, remoteConfigured: true },
+      {
+        allowedFeeTokens: undefined,
+        feeToken: undefined,
+        expected: undefined,
+        remoteConfigured: true,
+        incomingFeeToken: asset,
+      },
     ])('behavior: local fee-token configuration %j', async (config) => {
       const { allowedFeeTokens, feeToken, expected } = config
+      const remoteConfigured = 'remoteConfigured' in config && config.remoteConfigured
+      const hostedFetch = vi.fn(() => {
+        throw new Error('must use the local payer')
+      })
       // First simulate execution as the sender with fee fields omitted. This
       // catches call-level reverts without requiring the sender to fund fees.
       // The second simulation must reflect the FINAL co-signed envelope
@@ -2253,6 +2270,9 @@ describe('tempo', () => {
           tempo_server.charge({
             allowedFeeTokens,
             feeToken,
+            feePayer: remoteConfigured
+              ? { url: 'https://fee-payer.example', fetch: hostedFetch }
+              : undefined,
             getClient() {
               return interceptingClient
             },
@@ -2290,12 +2310,21 @@ describe('tempo', () => {
       })
 
       const challengeResponse = await fetch(httpServer.url)
-      const credential = await mppx.createCredential(challengeResponse)
+      let credential = await mppx.createCredential(challengeResponse)
+      if ('incomingFeeToken' in config && config.incomingFeeToken)
+        credential = credentialWithFeeToken(credential, config.incomingFeeToken)
       callRequests.length = 0
 
       const authResponse = await fetch(httpServer.url, {
         headers: { Authorization: credential },
       })
+      expect(hostedFetch).not.toHaveBeenCalled()
+      if (!expected) {
+        expect(authResponse.status).not.toBe(200)
+        expect(callRequests.length).toBeLessThan(2)
+        httpServer.close()
+        return
+      }
       expect(authResponse.status).toBe(200)
 
       expect(callRequests).toHaveLength(2)
@@ -2922,10 +2951,25 @@ describe('tempo', () => {
     test.each([
       { allowedFeeTokens: undefined, feeToken: defaults.tokens.pathUsd, accepted: true },
       { allowedFeeTokens: [asset], feeToken: asset, accepted: true },
-      { allowedFeeTokens: undefined, feeToken: asset, accepted: false },
+      { allowedFeeTokens: undefined, feeToken: asset, accepted: true },
       { allowedFeeTokens: [asset], feeToken: defaults.tokens.pathUsd, accepted: false },
+      { allowedFeeTokens: [defaults.tokens.pathUsd], feeToken: asset, accepted: false },
+      {
+        allowedFeeTokens: undefined,
+        feeToken: defaults.tokens.pathUsd,
+        incomingFeeToken: asset,
+        accepted: true,
+      },
+      { allowedFeeTokens: [asset], feeToken: asset, incomingFeeToken: asset, accepted: true },
+      {
+        allowedFeeTokens: [asset],
+        feeToken: asset,
+        incomingFeeToken: defaults.tokens.pathUsd,
+        accepted: false,
+      },
     ])('behavior: hosted fee-payer configuration %j', async (config) => {
       const { allowedFeeTokens, feeToken, accepted } = config
+      const incomingFeeToken = 'incomingFeeToken' in config ? config.incomingFeeToken : undefined
       const feePayerRequests: any[] = []
       const feePayerAuthorizations: (string | undefined)[] = []
       const feePayerHeaders = { Authorization: 'Bearer test' }
@@ -3019,7 +3063,27 @@ describe('tempo', () => {
       expect(JSON.stringify(challenge)).not.toContain(feePayerServer.url)
       expect(JSON.stringify(challenge)).not.toContain('Bearer test')
 
-      const response = await mppx.fetch(httpServer.url)
+      let credential = await mppx.createCredential(challengeResponse)
+      if (incomingFeeToken) credential = credentialWithFeeToken(credential, incomingFeeToken)
+      const rejectedIncoming =
+        incomingFeeToken &&
+        allowedFeeTokens &&
+        !allowedFeeTokens.some((token) => token === incomingFeeToken)
+      if (rejectedIncoming) {
+        await expect(serverWithFeePayer.validateCredential(credential)).rejects.toThrow(
+          'feeToken is not allowed',
+        )
+        await expect(serverWithFeePayer.verifyCredential(credential)).rejects.toThrow(
+          'feeToken is not allowed',
+        )
+        expect(sequence).toEqual([])
+        expect(feePayerRequests).toEqual([])
+        httpServer.close()
+        feePayerServer.close()
+        return
+      }
+      await serverWithFeePayer.validateCredential(credential)
+      const response = await fetch(httpServer.url, { headers: { Authorization: credential } })
       if (!accepted) {
         expect(response.status).not.toBe(200)
         expect(feePayerRequests.map(({ method }) => method)).toEqual(['eth_fillTransaction'])

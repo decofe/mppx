@@ -1,3 +1,4 @@
+import type { Account } from 'viem'
 import { expectTypeOf, test } from 'vp/test'
 
 import { tempo } from '../../server/index.js'
@@ -17,4 +18,28 @@ test('sponsored fee-token configuration accepts readonly address lists', () => {
   tempo.charge({ allowedFeeTokens: ['pathUSD'] })
   // @ts-expect-error — the allowlist applies only to charges
   tempo.session({ allowedFeeTokens })
+  // @ts-expect-error — omitting the option, not false, selects the hosted default
+  tempo.charge({ allowedFeeTokens: false })
+})
+
+test('public sponsorship configuration examples', () => {
+  const localSponsor = {} as Account
+  const pathUsd = '0x20c0000000000000000000000000000000000000'
+  const usdcE = '0x20C000000000000000000000b9537d11c60E8b50'
+
+  tempo.charge({ feePayer: localSponsor })
+  tempo.charge({ feePayer: 'https://your-fee-payer.example' })
+  tempo.charge({
+    feePayer: { url: 'https://your-fee-payer.example' },
+    allowedFeeTokens: [pathUsd, usdcE],
+  })
+  tempo.charge({
+    feePayer: localSponsor,
+    allowedFeeTokens: [pathUsd, usdcE],
+    feeToken: usdcE,
+  })
+  tempo.common({
+    feePayer: 'https://your-fee-payer.example',
+    allowedFeeTokens: [pathUsd],
+  })
 })

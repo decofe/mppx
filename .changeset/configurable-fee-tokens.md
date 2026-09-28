@@ -2,4 +2,4 @@
 'mppx': patch
 ---
 
-Added server-side `allowedFeeTokens` configuration for Tempo charges, covering local and hosted fee payers. Custom lists replace the existing chain-specific defaults.
+Added server-side `allowedFeeTokens` configuration for Tempo charges. Preserved local sponsorship defaults and allowed hosted sponsors to choose their fee token by default. Explicit lists restricted both local and hosted sponsorship while retaining address validation and other sponsorship checks.

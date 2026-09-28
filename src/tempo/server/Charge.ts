@@ -122,6 +122,14 @@ export function charge<const parameters extends charge.Parameters>(
     rpcUrl: defaults.rpcUrl,
   })
 
+  function resolveAllowedFeeTokens(chainId: number | undefined, hasLocalFeePayer: boolean) {
+    // A request-level local account takes precedence over a configured hosted payer.
+    return (
+      configuredAllowedFeeTokens ??
+      (remoteFeePayer && !hasLocalFeePayer ? undefined : FeePayer.defaultAllowedFeeTokens(chainId))
+    )
+  }
+
   function resolveRequest(request: Method.VerifyContext<typeof Methods.charge>['request']) {
     const parsed = Methods.charge.schema.request.safeParse(request)
     if (parsed.success) return parsed.data
@@ -333,7 +341,7 @@ export function charge<const parameters extends charge.Parameters>(
         )
       FeePayer.assertAllowedFeeToken(
         transaction,
-        configuredAllowedFeeTokens ?? FeePayer.defaultAllowedFeeTokens(chainId),
+        resolveAllowedFeeTokens(chainId, Account.is(request.feePayer) || !!feePayer),
       )
     } else {
       await viem_call(
@@ -570,13 +578,13 @@ export function charge<const parameters extends charge.Parameters>(
           let reservation: SponsorBudget.Handle | undefined
 
           try {
-            const allowedFeeTokens =
-              configuredAllowedFeeTokens ?? FeePayer.defaultAllowedFeeTokens(chainId)
+            const allowedFeeTokens = resolveAllowedFeeTokens(chainId, !!feePayerAccount)
             if (isFeePayerTx) FeePayer.assertAllowedFeeToken(transaction, allowedFeeTokens)
-            const selectableFeeTokens = allowedFeeTokens as readonly `0x${string}`[]
 
             const completedTransaction = await (async () => {
               if (feePayerAccount && methodDetails?.feePayer !== false) {
+                const selectableFeeTokens =
+                  allowedFeeTokens ?? FeePayer.defaultAllowedFeeTokens(chainId)
                 const completed = await FeePayer.preflightSponsorship({
                   transaction,
                   simulate: (request) => viem_call(client, request as never),
@@ -592,7 +600,7 @@ export function charge<const parameters extends charge.Parameters>(
                       }))
                     const sponsored = FeePayer.prepareSponsoredTransaction({
                       account: feePayerAccount,
-                      allowedFeeTokens,
+                      allowedFeeTokens: selectableFeeTokens,
                       challengeExpires: expires,
                       chainId: chainId ?? client.chain!.id,
                       details: { amount, currency, recipient },
@@ -794,9 +802,12 @@ export declare namespace charge {
   type Parameters = {
     /**
      * Tokens permitted for sponsored charge transaction fees, including tokens
-     * selected by a remote fee payer. Defaults to pathUSD and USDC.e on mainnet,
-     * and pathUSD on other chains. A custom list replaces these defaults and
-     * must contain at least one token. This does not change the payment currency.
+     * selected by a remote fee payer. Local sponsorship defaults to pathUSD and
+     * USDC.e on mainnet, and pathUSD on other chains. Hosted sponsorship has no
+     * token allowlist by default and trusts the configured provider's choice.
+     * A custom list replaces the local defaults and restricts hosted sponsorship.
+     * It must contain at least one token. Address validation and other sponsorship
+     * checks still apply. This does not change the payment currency or sessions.
      */
     allowedFeeTokens?: readonly `0x${string}`[] | undefined
     /** Enables first-party machine-token funding through the canonical swapper. */
