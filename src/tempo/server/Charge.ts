@@ -777,6 +777,17 @@ export function charge<const parameters extends charge.Parameters>(
             if (waitForConfirmation) {
               const receipt = await sendRawTransactionSync(client, {
                 serializedTransaction: serializedTransaction_final,
+              }).catch(async (error) => {
+                // An RPC failure does not prove the transaction failed to settle.
+                // Recover only the final signed hash; the usual transfer and memo
+                // validation below also applies to this receipt.
+                try {
+                  return await getTransactionReceipt(client, { hash: finalHash! })
+                } catch {
+                  // Keep the original broadcast error and replay claims when
+                  // settlement is still unknown. Never send another transaction.
+                  throw error
+                }
               })
               if (reservation) await SponsorBudget.release(sponsorBudgetStore!, reservation)
               const matchedLogs = await assertTransferLogs(receipt, {
