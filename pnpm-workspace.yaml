@@ -76,6 +76,19 @@ allowBuilds:
   utf-8-validate: true
 
 minimumReleaseAgeExclude:
+  - bun@1.4.4
+  - '@oven/bun-darwin-aarch64@1.4.4'
+  - '@oven/bun-darwin-x64@1.4.4'
+  - '@oven/bun-freebsd-aarch64@1.4.4'
+  - '@oven/bun-freebsd-x64@1.4.4'
+  - '@oven/bun-linux-aarch64@1.4.4'
+  - '@oven/bun-linux-aarch64-android@1.4.4'
+  - '@oven/bun-linux-aarch64-musl@1.4.4'
+  - '@oven/bun-linux-x64@1.4.4'
+  - '@oven/bun-linux-x64-android@1.4.4'
+  - '@oven/bun-linux-x64-musl@1.4.4'
+  - '@oven/bun-windows-aarch64@1.4.4'
+  - '@oven/bun-windows-x64@1.4.4'
   - next@16.3.6
   - '@grpc/grpc-js@1.14.5'
   - esbuild@0.28.1
