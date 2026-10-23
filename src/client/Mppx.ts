@@ -8,6 +8,7 @@ import type * as Method from '../Method.js'
 import type * as z from '../zod.js'
 import * as Fetch from './internal/Fetch.js'
 import * as MethodChallenge from './internal/MethodChallenge.js'
+import * as ProofRealm from './internal/ProofRealm.js'
 import * as Transport from './Transport.js'
 
 export type Methods = readonly (Method.AnyClient | readonly Method.AnyClient[])[]
@@ -315,6 +316,9 @@ export function create<
       challenge = challengeSnapshots[selected.index]!
       mi = selected.method as FlattenMethods<methods>[number]
       if (challenge.expires) Expires.assert(challenge.expires, challenge.id)
+      const httpResponse = response as unknown as Response
+      if (typeof Response !== 'undefined' && httpResponse instanceof Response && httpResponse.url)
+        ProofRealm.assert(challenge, new URL(httpResponse.url))
 
       const selectedChallenge = challenge
       const selectedMethod = mi
@@ -431,6 +435,8 @@ export function create<
       FlattenMethods<methods>,
       Transport.Transport<RequestInit, Response>
     >
+
+    ProofRealm.assert(payment.challenge, new URL(preparedHttp.replayRequest.url))
 
     const paymentMethod = preparedPaymentMethods.get(payment) ?? payment.method
     const createRequestCredential = memoizeCreateCredential(async (context) => {
